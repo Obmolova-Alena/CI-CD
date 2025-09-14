@@ -1,0 +1,79 @@
+stages:
+ - build
+ - code_style
+ - tests
+ - deploy
+
+build_job:
+    stage: build
+    image: ubuntu:22.04
+    before_script:
+      - sudo apt-get update && sudo apt-get install -y build-essential  
+    script:
+      - cd src_simplebash/cat
+      - make
+      - cd ../grep
+      - make
+    artifacts:
+      paths:
+      - src_simplebash/cat/s21_cat
+      - src_simplebash/grep/s21_grep
+    after_script:
+      - bash src/telegrambot.sh 
+
+code_style:
+    stage: code_style
+    image: ubuntu:22.04
+    script:
+      - cp materials/linters/.clang-format src_simplebash/cat/
+      - cp materials/linters/.clang-format src_simplebash/grep/
+      - cd src_simplebash/cat
+      - clang-format -i *.c *.h
+      - cd ../grep
+      - clang-format -i *.c *.h
+      - cd ../ 
+      - |
+        if clang-format -n cat/*.c cat/*.h && clang-format -n grep/*.c grep/*.h ; then
+          echo "Успех" 
+        else
+          echo "Ошибка код стайла" 
+          exit 1;
+        fi
+    after_script:
+      - bash src/telegrambot.sh 
+
+integration_test:
+    stage: tests
+    image: ubuntu:22.04
+    needs:
+      - job: "build_job"
+      - job: "code_style"
+    script:
+      - mv src_simplebash/cat/s21_cat src_simplebash/tests/cat_tests/
+      - mv src_simplebash/grep/s21_grep src_simplebash/tests/grep_tests/
+      - cd src_simplebash/tests
+      - ./test_all.py
+      - if python3 ./test_all.py; then
+          echo "Интеграционные тесты прошли успешно";
+        else 
+          echo "Провал";
+        exit 1;
+        fi
+    rules:
+      - if: '$CI_PIPELINE_SOURCE == "push"'
+      - when: on_success
+    after_script:
+      - bash src/telegrambot.sh 
+
+deploy_vm2:
+    stage: deploy
+    image: ubuntu:22.04
+    needs:
+      - job: "integration_test"
+    script:
+      - bash src/deploy.sh
+    rules:
+        - if: '$CI_PIPELINE_SOURCE == "push"'
+        - when: manual
+    after_script:
+      - bash src/telegrambot.sh 

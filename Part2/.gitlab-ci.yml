@@ -1,0 +1,18 @@
+stages:
+ - build
+
+build_job:
+    stage: build
+    script:
+      - cd ../C3_SimpleBashUtils-4/src/cat
+      - make
+      - cd ../grep
+      - cd src/grep
+      - make
+      - cd ../ 
+      - mkdir -p build_artifacts
+      - cp -r build/* build_artifacts
+    artifacts:
+       paths:
+         - build_artifacts/
+       expire_in: 30 days
